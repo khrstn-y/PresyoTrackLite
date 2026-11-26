@@ -5,21 +5,20 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.effect.DropShadow;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.stage.Stage;
-import javafx.stage.Modality;
-import javafx.scene.text.Font;
-import javafx.scene.text.FontWeight;
+
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
 public class Main extends Application {
     private BorderPane shell;
-    private boolean pricesOpen, expensesOpen;
+    private boolean pricesOpen, expensesOpen, settingsOpen;
+    private StackPane appBackdrop;
+    private String accountName = "Your Name", accountEmail = "";
     private String period = "Month";
     private final java.util.List<Product> products = new java.util.ArrayList<>(java.util.List.of(
         new Product("Coffee Beans", "Beans", 280, 265), new Product("Dozen of Eggs", "Dairy & Eggs", 220, 230),
@@ -38,6 +37,7 @@ public class Main extends Application {
     @Override
     public void start(Stage stage) {
         StackPane backdrop = new StackPane();
+        appBackdrop = backdrop;
         backdrop.getStyleClass().add("backdrop");
 
         shell = new BorderPane();
@@ -48,10 +48,7 @@ public class Main extends Application {
         backdrop.getChildren().add(buildWelcome(backdrop));
 
         Scene scene = new Scene(backdrop, 390, 844);
-        scene.getStylesheets().add(
-                getClass().getResource("/com/presyotrack/css/style.css")
-                        .toExternalForm()
-        );
+        scene.getStylesheets().add(getClass().getResource("/com/presyotrack/css/style.css").toExternalForm());
         stage.setTitle("PresyoTrack Lite");
         stage.setMinWidth(390);
         stage.setMinHeight(700);
@@ -111,7 +108,7 @@ public class Main extends Application {
         card.getChildren().addAll(welcomeLabel("Monthly Grocery Budget","setup-label"),amountBox,presets,welcomeLabel("Select Budget Month","setup-label"),month,note);
         Region middle = new Region(); VBox.setVgrow(middle,Priority.ALWAYS); Region bottom = new Region(); VBox.setVgrow(bottom,Priority.ALWAYS);
         Button save = new Button("Save & Continue"); save.getStyleClass().add("welcome-start"); save.setMaxWidth(Double.MAX_VALUE); VBox.setMargin(save,new Insets(0,22,0,22));
-        save.setOnAction(e->{try {double value=Double.parseDouble(amount.getText().replace(",", "").trim()); if(!Double.isFinite(value)||value<=0||month.getValue()==null) throw new IllegalArgumentException(); budget=value; budgetMonth=month.getValue(); pricesOpen=false; expensesOpen=false; refreshScreen(); backdrop.getChildren().setAll(shell); } catch(IllegalArgumentException ex){alert("Invalid budget","Enter a positive budget and select a month.");}});
+        save.setOnAction(e->{try {double value=Double.parseDouble(amount.getText().replace(",", "").trim()); if(!Double.isFinite(value)||value<=0||month.getValue()==null) throw new IllegalArgumentException(); budget=value; budgetMonth=month.getValue(); pricesOpen=false; expensesOpen=false; settingsOpen=false; refreshScreen(); backdrop.getChildren().setAll(shell); } catch(IllegalArgumentException ex){alert("Invalid budget","Enter a positive budget and select a month.");}});
         page.getChildren().addAll(brand,top,hero,middle,card,bottom,save); return page;
     }
 
@@ -140,7 +137,7 @@ public class Main extends Application {
     }
 
     private HBox buildHeader() {
-        Label avatar = new Label("P");
+        Label avatar = new Label(accountName.equals("Your Name") ? "P" : accountName.substring(0,1).toUpperCase(Locale.ROOT));
         avatar.getStyleClass().add("avatar");
         Label brand = new Label("PresyoTrack Lite");
         brand.getStyleClass().add("brand");
@@ -230,10 +227,10 @@ public class Main extends Application {
     }
 
     private HBox buildBottomBar() {
-        Button dashboard = navButton("▣", "Dashboard", !pricesOpen && !expensesOpen);
+        Button dashboard = navButton("▣", "Dashboard", !pricesOpen && !expensesOpen && !settingsOpen);
         Button prices = navButton("◇", "Prices", pricesOpen);
         Button expenses = navButton("▤", "Expenses", expensesOpen);
-        Button settings = navButton("⚙", "Settings", false);
+        Button settings = navButton("⚙", "Settings", settingsOpen);
         HBox nav = new HBox(12, dashboard, prices, expenses, settings);
         nav.getStyleClass().add("nav-pill");
         nav.setAlignment(Pos.CENTER);
@@ -257,7 +254,7 @@ public class Main extends Application {
         button.getStyleClass().add("nav-item"); if(active) button.getStyleClass().add("active");
         button.setMaxWidth(Double.MAX_VALUE);
         button.setOnAction(e -> {
-            closeExpense(); if (text.equals("Dashboard") || text.equals("Prices") || text.equals("Expenses")) { pricesOpen = text.equals("Prices"); expensesOpen = text.equals("Expenses"); refreshScreen(); } else alert(text, text + " section selected.");
+            closeExpense(); pricesOpen = text.equals("Prices"); expensesOpen = text.equals("Expenses"); settingsOpen = text.equals("Settings"); refreshScreen();
         });
         return button;
     }
@@ -291,8 +288,48 @@ public class Main extends Application {
     private String money(double n) { return String.format(Locale.US,"PHP %,.2f",n); }
     private void refreshScreen() {
         spent = expenses.stream().filter(x -> java.time.YearMonth.from(x.date()).equals(budgetMonth)).mapToDouble(Expense::amount).sum();
-        shell.setCenter(pricesOpen ? buildPrices() : expensesOpen ? buildExpenses() : buildDashboard());
+        shell.setCenter(settingsOpen ? buildSettings() : pricesOpen ? buildPrices() : expensesOpen ? buildExpenses() : buildDashboard());
         shell.setBottom(buildBottomBar());
+    }
+    private VBox buildSettings() {
+        VBox content = new VBox(14); content.getStyleClass().add("settings-page");
+        Label heading = welcomeLabel("Settings", "settings-heading");
+        Label subtitle = welcomeLabel("Manage your account and budget preferences.", "subtext"); subtitle.setWrapText(true);
+        VBox account = settingsCard();
+        Label avatar = welcomeLabel(accountName.equals("Your Name") ? "P" : accountName.substring(0,1).toUpperCase(Locale.ROOT), "avatar");
+        Label name = welcomeLabel(accountName,"settings-name"); name.setWrapText(true);
+        Label email = welcomeLabel(accountEmail.isBlank()?"No email added":accountEmail,"subtext"); email.setWrapText(true);
+        VBox identity = new VBox(3,name,email,welcomeLabel("Personal Account","subtext")); HBox.setHgrow(identity,Priority.ALWAYS);
+        HBox profile = new HBox(12,avatar,identity); profile.setAlignment(Pos.CENTER_LEFT);
+        Button editProfile = settingsButton("Edit Profile   ›"); editProfile.setOnAction(e -> editAccount());
+        account.getChildren().addAll(profile,settingsLine(),editProfile);
+        VBox budgetCard = settingsCard();
+        Button editBudget = settingsButton("Edit Budget ✎"); editBudget.setOnAction(e -> editSettingsBudget());
+        HBox amount = new HBox(8,welcomeLabel(money(budget),"settings-money"),editBudget); amount.setAlignment(Pos.CENTER_LEFT);
+        Button month = settingsButton("Budget Month   ›"); month.setOnAction(e -> editSettingsBudget());
+        double left = budget-spent;
+        ProgressBar progress = new ProgressBar(Math.max(0,Math.min(1,spent/budget))); progress.setMaxWidth(Double.MAX_VALUE); progress.getStyleClass().add("settings-progress");
+        budgetCard.getChildren().addAll(welcomeLabel("Monthly Grocery Budget","subtext"),amount,settingsLine(),month,welcomeLabel(budgetMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy",Locale.ENGLISH)),"settings-name"),settingsLine(),welcomeLabel("Remaining Balance","subtext"),welcomeLabel(money(left),"settings-money"),welcomeLabel(Math.round(left/budget*100)+"% left","subtext"),progress);
+        VBox about = settingsCard(); Button aboutButton = settingsButton("ⓘ  About PresyoTrack Lite   ›"); aboutButton.setOnAction(e -> alert("About PresyoTrack Lite","Version 1.0.0\nYour Money. Better Days.\nMonitor commodity prices, record grocery expenses and manage your monthly budget.")); about.getChildren().addAll(aboutButton,welcomeLabel("Version 1.0.0","subtext"));
+        Button logout = settingsButton("Log Out"); logout.getStyleClass().add("settings-logout"); logout.setOnAction(e -> { Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,"Return to the welcome screen? Your current data stays in memory.",ButtonType.CANCEL,ButtonType.OK); confirm.setHeaderText("Log Out"); if(confirm.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){closeExpense(); settingsOpen=false; pricesOpen=false; expensesOpen=false; refreshScreen(); appBackdrop.getChildren().setAll(buildWelcome(appBackdrop));} });
+        Label slogan = welcomeLabel("Your Money. Better Days.","subtext"); slogan.setMaxWidth(Double.MAX_VALUE); slogan.setAlignment(Pos.CENTER);
+        content.getChildren().addAll(heading,subtitle,welcomeLabel("Manage Your Account","settings-section"),account,welcomeLabel("Budget Management","settings-section"),budgetCard,about,logout,slogan);
+        ScrollPane scroll = new ScrollPane(content); scroll.setFitToWidth(true); scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER); scroll.getStyleClass().add("transparent-scroll"); VBox wrapper = new VBox(scroll); VBox.setVgrow(scroll,Priority.ALWAYS); return wrapper;
+    }
+    private VBox settingsCard(){VBox card=new VBox(9);card.getStyleClass().add("settings-card");return card;}
+    private Region settingsLine(){Region line=new Region();line.getStyleClass().add("separator");return line;}
+    private Button settingsButton(String text){Button b=new Button(text);b.getStyleClass().add("settings-action");b.setMaxWidth(Double.MAX_VALUE);return b;}
+    private void editAccount(){
+        Dialog<ButtonType> d=new Dialog<>();d.setTitle("Edit Profile");d.getDialogPane().getButtonTypes().addAll(ButtonType.CANCEL,ButtonType.OK);
+        TextField name=new TextField(accountName);TextField email=new TextField(accountEmail);email.setPromptText("Email address");
+        d.getDialogPane().setContent(new VBox(8,new Label("Name"),name,new Label("Email"),email));
+        d.showAndWait().filter(v->v==ButtonType.OK).ifPresent(v->{if(name.getText().isBlank()||(!email.getText().isBlank()&&!email.getText().matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+"))){alert("Invalid profile","Enter a name and a valid email (or leave email blank).");return;}accountName=name.getText().trim();accountEmail=email.getText().trim();shell.setTop(buildHeader());refreshScreen();});
+    }
+    private void editSettingsBudget(){
+        Dialog<ButtonType> d=new Dialog<>();d.setTitle("Edit Budget");d.getDialogPane().getButtonTypes().addAll(ButtonType.CANCEL,ButtonType.OK);
+        TextField amount=new TextField(String.format(Locale.US,"%,.2f",budget)); ComboBox<java.time.YearMonth> month=new ComboBox<>(); for(int i=-24;i<=24;i++)month.getItems().add(budgetMonth.plusMonths(i));month.setValue(budgetMonth);
+        d.getDialogPane().setContent(new VBox(8,new Label("Monthly grocery budget (PHP)"),amount,new Label("Budget month"),month));
+        d.showAndWait().filter(v->v==ButtonType.OK).ifPresent(v->{try{double n=Double.parseDouble(amount.getText().replace(",", "").trim());if(!Double.isFinite(n)||n<=0||month.getValue()==null)throw new IllegalArgumentException();budget=n;budgetMonth=month.getValue();refreshScreen();}catch(IllegalArgumentException ex){alert("Invalid budget","Enter a positive amount and select a month.");}});
     }
     private VBox buildExpenses() {
         VBox content = new VBox(12); content.setPadding(new Insets(65, 23, 8, 23));
