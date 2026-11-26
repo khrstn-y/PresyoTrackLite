@@ -1,18 +1,29 @@
-
 package com.presyotrack.model;
 
-public class HouseholdProduct extends Product {
+import com.presyotrack.interfaces.Reportable;
 
-    // Constructor
+public class HouseholdProduct extends Product implements Reportable {
+
     public HouseholdProduct(String name, double currentPrice,
                             double previousPrice) {
 
         super(name, "Household", currentPrice, previousPrice);
     }
 
-    // Overridden method
     @Override
     public String getProductType() {
         return "Household Product";
+    }
+
+    @Override
+    public String generateReport() {
+        return String.format(
+            "Product: %s%nCategory: %s%nCurrent Price: %.2f%nPrevious Price: %.2f%nPrice Difference: %.2f",
+            getName(),
+            getCategory(),
+            getCurrentPrice(),
+            getPreviousPrice(),
+            getCurrentPrice() - getPreviousPrice()
+        );
     }
 }

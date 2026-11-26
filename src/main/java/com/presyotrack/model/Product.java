@@ -1,6 +1,8 @@
 
 package com.presyotrack.model;
 
+import com.presyotrack.exceptions.InvalidPriceException;
+
 public abstract class Product {
 
     private String name;
@@ -66,6 +68,17 @@ public abstract class Product {
         }
 
         this.previousPrice = previousPrice;
+    }
+
+    // Update price using custom exception
+    public void updateCurrentPrice(double currentPrice)
+            throws InvalidPriceException {
+
+        if (!Double.isFinite(currentPrice) || currentPrice < 0) {
+            throw new InvalidPriceException("Invalid product price.");
+        }
+
+        setCurrentPrice(currentPrice);
     }
 
     // Abstract method
