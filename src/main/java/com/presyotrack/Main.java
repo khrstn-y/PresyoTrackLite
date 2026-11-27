@@ -24,6 +24,7 @@ public class Main extends Application {
     private final com.presyotrack.service.FileManager fileManager =
             new com.presyotrack.service.FileManager();
     private com.presyotrack.service.BudgetManager budgetManager;
+    private com.presyotrack.service.BudgetReport budgetReport;
     private com.presyotrack.service.ProductManager productManager;
     private com.presyotrack.service.PriceTracker priceTracker;
     private final java.util.List<Product> products = new java.util.ArrayList<>();
@@ -53,6 +54,11 @@ public class Main extends Application {
         budgetManager =
                 new com.presyotrack.service.BudgetManager(initialBudget);
         budgetManager.loadData();
+        budgetReport = new com.presyotrack.service.BudgetReport(budgetManager);
+
+        // Restore the saved budget for the JavaFX interface
+        budget = initialBudget.getAmount();
+        budgetMonth = initialBudget.getMonth();
 
         // Restore saved expenses into the UI list
         for (com.presyotrack.model.Expense savedExpense : budgetManager.getExpenses()) {
@@ -207,7 +213,7 @@ public class Main extends Application {
         VBox balance = new VBox(3);
         Label eyebrow = new Label("REMAINING BALANCE");
         eyebrow.getStyleClass().add("eyebrow");
-        balanceValue = new Label(money(budget-spent));
+        balanceValue = new Label(money(budgetReport.getRemainingBudget()));
         balanceValue.getStyleClass().add("balance");
         Label sub = new Label("of " + money(budget) + " Monthly Budget");
         sub.getStyleClass().add("subtext");
@@ -227,8 +233,8 @@ public class Main extends Application {
         Region line = new Region();
         line.getStyleClass().add("separator");
         activityList.getChildren().clear();
-        spent = expenses.stream().filter(x -> java.time.YearMonth.from(x.date()).equals(budgetMonth)).mapToDouble(Expense::amount).sum();
-        balanceValue.setText(money(budget-spent)); spentValue.setText(money(spent));
+        spent = budgetReport.getTotalExpenses();
+        balanceValue.setText(money(budgetReport.getRemainingBudget())); spentValue.setText(money(spent));
         for (Expense x : expenses) if (java.time.YearMonth.from(x.date()).equals(budgetMonth)) addActivityRow(x);
         recent.getChildren().addAll(title, line, activityList);
         VBox.setVgrow(recent, Priority.ALWAYS);
@@ -502,7 +508,7 @@ public class Main extends Application {
 
     private String money(double n) { return String.format(Locale.US,"PHP %,.2f",n); }
     private void refreshScreen() {
-        spent = expenses.stream().filter(x -> java.time.YearMonth.from(x.date()).equals(budgetMonth)).mapToDouble(Expense::amount).sum();
+        spent = budgetReport.getTotalExpenses();
         shell.setCenter(settingsOpen ? buildSettings() : pricesOpen ? buildPrices() : expensesOpen ? buildExpenses() : buildDashboard());
         shell.setBottom(buildBottomBar());
     }
@@ -522,7 +528,7 @@ public class Main extends Application {
         Button editBudget = settingsButton("Edit Budget ✎"); editBudget.setOnAction(e -> editSettingsBudget());
         HBox amount = new HBox(8,welcomeLabel(money(budget),"settings-money"),editBudget); amount.setAlignment(Pos.CENTER_LEFT);
         Button month = settingsButton("Budget Month   ›"); month.setOnAction(e -> editSettingsBudget());
-        double left = budget-spent;
+        double left = budgetReport.getRemainingBudget();
         ProgressBar progress = new ProgressBar(Math.max(0,Math.min(1,budget > 0 ? spent / budget : 0))); progress.setMaxWidth(Double.MAX_VALUE); progress.getStyleClass().add("settings-progress");
         budgetCard.getChildren().addAll(welcomeLabel("Monthly Grocery Budget","subtext"),amount,settingsLine(),month,welcomeLabel(budgetMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy",Locale.ENGLISH)),"settings-name"),settingsLine(),welcomeLabel("Remaining Balance","subtext"),welcomeLabel(money(left),"settings-money"),welcomeLabel(Math.round(budget > 0 ? left / budget * 100 : 0)+"% left","subtext"),progress);
         VBox about = settingsCard(); Button aboutButton = settingsButton("ⓘ  About PresyoTrack Lite   ›"); aboutButton.setOnAction(e -> alert("About PresyoTrack Lite","Version 1.0.0\nYour Money. Better Days.\nMonitor commodity prices, record grocery expenses and manage your monthly budget.")); about.getChildren().addAll(aboutButton,welcomeLabel("Version 1.0.0","subtext"));
@@ -544,15 +550,15 @@ public class Main extends Application {
         Dialog<ButtonType> d=new Dialog<>();d.setTitle("Edit Budget");d.getDialogPane().getButtonTypes().addAll(ButtonType.CANCEL,ButtonType.OK);
         TextField amount=new TextField(String.format(Locale.US,"%,.2f",budget)); ComboBox<java.time.YearMonth> month=new ComboBox<>(); for(int i=-24;i<=24;i++)month.getItems().add(budgetMonth.plusMonths(i));month.setValue(budgetMonth);
         d.getDialogPane().setContent(new VBox(8,new Label("Monthly grocery budget (PHP)"),amount,new Label("Budget month"),month));
-        d.showAndWait().filter(v->v==ButtonType.OK).ifPresent(v->{try{double n=Double.parseDouble(amount.getText().replace(",", "").trim());if(!Double.isFinite(n)||n<=0||month.getValue()==null)throw new IllegalArgumentException();budget=n;budgetMonth=month.getValue();refreshScreen();}catch(IllegalArgumentException ex){alert("Invalid budget","Enter a positive amount and select a month.");}});
+        d.showAndWait().filter(v->v==ButtonType.OK).ifPresent(v->{try{double n=Double.parseDouble(amount.getText().replace(",", "").trim());if(!Double.isFinite(n)||n<=0||month.getValue()==null)throw new IllegalArgumentException();com.presyotrack.model.Budget updatedBudget = new com.presyotrack.model.Budget(n, month.getValue()); budgetManager.updateBudget(updatedBudget); budgetManager.saveData(); budget=n; budgetMonth=month.getValue(); refreshScreen();}catch(IllegalArgumentException ex){alert("Invalid budget","Enter a positive amount and select a month.");}});
     }
     private VBox buildExpenses() {
         VBox content = new VBox(12); content.setPadding(new Insets(65, 23, 8, 23));
         Region line = new Region(); line.getStyleClass().add("separator");
-        Label remaining = welcomeLabel(money(budget-spent), "balance");
+        Label remaining = welcomeLabel(money(budgetReport.getRemainingBudget()), "balance");
         Label cap = welcomeLabel("of " + money(budget) + " cap (" + Math.round(budget > 0 ? spent / budget * 100 : 0) + "% used)", "subtext");
         Button edit = new Button("Edit Budget ✎"); edit.getStyleClass().add("setup-preset");
-        edit.setOnAction(e -> { TextInputDialog d = new TextInputDialog(String.valueOf(budget)); d.setTitle("Edit Budget"); d.setHeaderText("Monthly grocery budget (PHP)"); d.showAndWait().ifPresent(v -> {try {double n=Double.parseDouble(v.replace(",", "").trim()); if(!Double.isFinite(n)||n<=0) throw new IllegalArgumentException(); budget=n; refreshScreen();} catch(IllegalArgumentException ex){alert("Invalid budget","Enter a positive amount.");}}); });
+        edit.setOnAction(e -> editSettingsBudget());
         Region space = new Region(); HBox.setHgrow(space,Priority.ALWAYS);
         HBox capRow = new HBox(5,cap,space,edit); capRow.setAlignment(Pos.CENTER_LEFT);
         Region line2 = new Region(); line2.getStyleClass().add("separator");
@@ -568,8 +574,8 @@ public class Main extends Application {
         VBox legend=new VBox(13); legend.getStyleClass().add("expense-glass");
         for(int i=0;i<4;i++){Label swatch=new Label(" "); swatch.setStyle("-fx-background-color: "+colors[i]+"; -fx-background-radius: 7; -fx-min-width: 16; -fx-min-height: 22;"); Label name=welcomeLabel(categories[i],"subtext"); Label value=welcomeLabel(money(totals[i])+" • "+String.format(Locale.US,"%.1f%%",total==0?0:totals[i]/total*100),"expense-legend-value"); HBox row=new HBox(7,swatch,new VBox(name,value));row.setAlignment(Pos.CENTER_LEFT);legend.getChildren().add(row);}
         Region gap=new Region(); VBox.setVgrow(gap,Priority.ALWAYS);
-        boolean safe=spent<=budget; Label icon=new Label(safe?"✓":"!"); icon.setStyle("-fx-font-size: 23; -fx-text-fill: "+(safe?"#42db61":"#ffba68")+";");
-        HBox status=new HBox(8,icon,new VBox(welcomeLabel(safe?"Within Safe Budget Cap":"Budget Cap Exceeded","activity-name"),welcomeLabel("Remaining: "+money(budget-spent)+" / "+Math.round(budget > 0 ? (budget - spent) / budget * 100 : 0)+"% left","activity-date")));status.setAlignment(Pos.CENTER_LEFT);status.getStyleClass().add("expense-glass");
+        boolean safe=budgetReport.getRemainingBudget()>=0; Label icon=new Label(safe?"✓":"!"); icon.setStyle("-fx-font-size: 23; -fx-text-fill: "+(safe?"#42db61":"#ffba68")+";");
+        HBox status=new HBox(8,icon,new VBox(welcomeLabel(safe?"Within Safe Budget Cap":"Budget Cap Exceeded","activity-name"),welcomeLabel("Remaining: "+money(budgetReport.getRemainingBudget())+" / "+Math.round(budget > 0 ? (budget - spent) / budget * 100 : 0)+"% left","activity-date")));status.setAlignment(Pos.CENTER_LEFT);status.getStyleClass().add("expense-glass");
         content.getChildren().addAll(line,remaining,capRow,line2,filters,chart,legend,gap,status);
         ScrollPane scroll=new ScrollPane(content);scroll.setFitToWidth(true);scroll.setFitToHeight(true);scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);scroll.getStyleClass().add("transparent-scroll"); VBox wrapper=new VBox(scroll);VBox.setVgrow(scroll,Priority.ALWAYS);return wrapper;
     }
