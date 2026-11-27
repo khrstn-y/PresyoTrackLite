@@ -6,8 +6,12 @@ public class FoodProduct extends Product implements Reportable {
 
     public FoodProduct(String name, double currentPrice,
                        double previousPrice) {
+        this(name, "Food", currentPrice, previousPrice);
+    }
 
-        super(name, "Food", currentPrice, previousPrice);
+    public FoodProduct(String name, String category,
+                       double currentPrice, double previousPrice) {
+        super(name, category, currentPrice, previousPrice);
     }
 
     @Override
@@ -19,11 +23,8 @@ public class FoodProduct extends Product implements Reportable {
     public String generateReport() {
         return String.format(
             "Product: %s%nCategory: %s%nCurrent Price: %.2f%nPrevious Price: %.2f%nPrice Difference: %.2f",
-            getName(),
-            getCategory(),
-            getCurrentPrice(),
-            getPreviousPrice(),
-            getCurrentPrice() - getPreviousPrice()
+            getName(), getCategory(), getCurrentPrice(),
+            getPreviousPrice(), getCurrentPrice() - getPreviousPrice()
         );
     }
 }

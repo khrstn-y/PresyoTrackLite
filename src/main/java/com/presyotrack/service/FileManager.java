@@ -26,6 +26,7 @@ public class FileManager {
             for (Product product : products) {
                 writer.write(product.getProductType() + "|"
                         + clean(product.getName()) + "|"
+                        + clean(product.getCategory()) + "|"
                         + clean(product.getCurrentPrice()) + "|"
                         + clean(product.getPreviousPrice()));
                 writer.newLine();
@@ -55,20 +56,36 @@ public class FileManager {
                 try {
                     String[] data = line.split("\\|", -1);
 
-                    if (data.length != 4) continue;
+                    if (data.length != 4 && data.length != 5) {
+                        continue;
+                    }
 
                     String type = data[0];
                     String name = data[1];
-                    double current = Double.parseDouble(data[2]);
-                    double previous = Double.parseDouble(data[3]);
+                    String category;
+                    double current;
+                    double previous;
 
-                    if (type.equals("Food Product")) {
-                        products.add(new FoodProduct(name, current, previous));
-                    } else if (type.equals("Household Product")) {
-                        products.add(new HouseholdProduct(name, current, previous));
+                    if (data.length == 4) {
+                        category = type.equals("Household Product")
+                                ? "Household" : "Food";
+                        current = Double.parseDouble(data[2]);
+                        previous = Double.parseDouble(data[3]);
+                    } else {
+                        category = data[2];
+                        current = Double.parseDouble(data[3]);
+                        previous = Double.parseDouble(data[4]);
                     }
 
-                } catch (IllegalArgumentException e) {
+                    if (type.equals("Food Product")) {
+                        products.add(new FoodProduct(
+                                name, category, current, previous));
+                    } else if (type.equals("Household Product")) {
+                        products.add(new HouseholdProduct(
+                                name, category, current, previous));
+                    }
+
+                } catch (RuntimeException e) {
                     System.out.println("Skipping invalid product record.");
                 }
             }
