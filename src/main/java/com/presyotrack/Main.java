@@ -295,12 +295,12 @@ public class Main extends Application {
                 return;
             }
 
-            javafx.scene.control.Dialog<javafx.scene.control.ButtonType> dialog =
-                    new javafx.scene.control.Dialog<>();
+            Dialog<ButtonType> dialog =
+                    new Dialog<>();
             dialog.setTitle("Edit Expense");
             dialog.getDialogPane().getButtonTypes().addAll(
-                    javafx.scene.control.ButtonType.OK,
-                    javafx.scene.control.ButtonType.CANCEL);
+                    ButtonType.OK,
+                    ButtonType.CANCEL);
 
             TextField name = new TextField(expense.name());
             TextField amount = new TextField(String.valueOf(expense.amount()));
@@ -333,7 +333,7 @@ public class Main extends Application {
 
             dialog.showAndWait()
                     .filter(result -> result ==
-                            javafx.scene.control.ButtonType.OK)
+                            ButtonType.OK)
                     .ifPresent(result -> {
                         try {
                             double value = Double.parseDouble(
@@ -384,18 +384,18 @@ public class Main extends Application {
         });
 
         delete.setOnAction(event -> {
-            javafx.scene.control.Alert confirm =
-                    new javafx.scene.control.Alert(
-                            javafx.scene.control.Alert.AlertType.CONFIRMATION,
+            Alert confirm =
+                    new Alert(
+                            Alert.AlertType.CONFIRMATION,
                             "Delete " + expense.name() + "?",
-                            javafx.scene.control.ButtonType.YES,
-                            javafx.scene.control.ButtonType.NO);
+                            ButtonType.YES,
+                            ButtonType.NO);
 
             confirm.setHeaderText("Delete Expense");
 
             if (confirm.showAndWait().orElse(
-                    javafx.scene.control.ButtonType.NO)
-                    == javafx.scene.control.ButtonType.YES) {
+                    ButtonType.NO)
+                    == ButtonType.YES) {
 
                 com.presyotrack.model.Expense oldExpense =
                         findBackendExpense(expense);
@@ -579,7 +579,67 @@ public class Main extends Application {
         content.getChildren().addAll(line,remaining,capRow,line2,filters,chart,legend,gap,status);
         ScrollPane scroll=new ScrollPane(content);scroll.setFitToWidth(true);scroll.setFitToHeight(true);scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);scroll.getStyleClass().add("transparent-scroll"); VBox wrapper=new VBox(scroll);VBox.setVgrow(scroll,Priority.ALWAYS);return wrapper;
     }
+    private boolean marketDeck = true;
     private VBox buildPrices() {
+        Button personal = new Button("My Products");
+        Button market = new Button("Albay Market Prices");
+        personal.getStyleClass().addAll("deck-tab", marketDeck ? "deck-inactive" : "deck-active");
+        market.getStyleClass().addAll("deck-tab", marketDeck ? "deck-active" : "deck-inactive");
+        personal.setMaxWidth(Double.MAX_VALUE); market.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(personal, Priority.ALWAYS); HBox.setHgrow(market, Priority.ALWAYS);
+        HBox tabs = new HBox(8, personal, market); tabs.setPadding(new Insets(12,18,0,18));
+        StackPane deck = new StackPane(marketDeck ? buildMarketPrices() : buildPersonalPrices());
+        personal.setOnAction(e -> { marketDeck=false; refreshScreen(); });
+        market.setOnAction(e -> { marketDeck=true; refreshScreen(); });
+        VBox wrapper = new VBox(6,tabs,deck); VBox.setVgrow(deck,Priority.ALWAYS); return wrapper;
+    }
+    private VBox buildMarketPrices() {
+        VBox content = new VBox(8); content.setPadding(new Insets(12,0,0,0));
+        VBox summary = new VBox(5); summary.getStyleClass().add("tracker-summary");
+        Label title=welcomeLabel("COMMODITY TRACKER", "eyebrow");
+        Label count=welcomeLabel("0 Market Records", "tracker-count");
+        Label subtitle=welcomeLabel("Local price vs. Bicol benchmark", "subtext");
+        HBox stats=new HBox(8);
+        summary.getChildren().addAll(title,count,subtitle,stats); VBox.setMargin(summary,new Insets(0,18,0,18));
+        TextField search=new TextField(); search.setPromptText("Search Products..."); search.getStyleClass().add("product-search");
+        ComboBox<String> market=new ComboBox<>(); market.getItems().addAll("All markets","Legazpi City","Ligao City"); market.setValue("All markets");
+        ComboBox<String> filter=new ComboBox<>(); filter.getItems().addAll("All prices","Above benchmark","Below benchmark","At benchmark"); filter.setValue("All prices");
+        HBox controls=new HBox(6,market,filter); market.setMaxWidth(Double.MAX_VALUE); filter.setMaxWidth(Double.MAX_VALUE); HBox.setHgrow(market,Priority.ALWAYS); HBox.setHgrow(filter,Priority.ALWAYS);
+        VBox tools=new VBox(6,search,controls); VBox.setMargin(tools,new Insets(0,18,4,18));
+        VBox panel=new VBox(10); panel.getStyleClass().add("activity-panel");
+        Label heading=welcomeLabel("Commodity Prices", "section-title");
+        Button all=new Button("View All"); all.getStyleClass().add("plain-action"); all.setOnAction(e->{search.clear();market.setValue("All markets");filter.setValue("All prices");});
+        Region spacer=new Region(); HBox.setHgrow(spacer,Priority.ALWAYS); HBox head=new HBox(heading,spacer,all); head.setAlignment(Pos.CENTER_LEFT);
+        VBox rows=new VBox(12); Label note=welcomeLabel("Snapshot: Nov 9, 2026 • Not live prices", "subtext"); note.setWrapText(true);
+        panel.getChildren().addAll(head,note,rows); VBox.setVgrow(panel,Priority.ALWAYS);
+        content.getChildren().addAll(summary,tools,panel);
+        try {
+            var quotes=new com.presyotrack.service.CommodityDAO().load();
+            Runnable render=()->{
+                var selected=quotes.stream().filter(q->market.getValue().equals("All markets")||q.market().startsWith(market.getValue())).toList();
+                long up=selected.stream().filter(q->q.difference()>0).count(), down=selected.stream().filter(q->q.difference()<0).count();
+                count.setText(selected.size()+" Market Records");
+                stats.getChildren().setAll(statCard("⊙","Tracked:",""+selected.size()),statCard("↗","Above:",up+" ▴"),statCard("↘","Below:",down+" ▾"));
+                rows.getChildren().clear(); String query=search.getText().toLowerCase(Locale.ROOT);
+                for(var q:selected) {
+                    if(!(q.name()+" "+q.category()).toLowerCase(Locale.ROOT).contains(query)) continue;
+                    if(!switch(filter.getValue()){case "Above benchmark"->q.difference()>0;case "Below benchmark"->q.difference()<0;case "At benchmark"->q.difference()==0;default->true;}) continue;
+                    Label icon=welcomeLabel("◇","product-icon"); Label name=welcomeLabel(q.name(),"activity-name"); name.setWrapText(true);
+                    Label meta=welcomeLabel(q.market().split(" Public")[0]+" • "+q.unit(),"activity-date");
+                    Label ref=welcomeLabel("Ref: "+money(q.benchmark()),"activity-date");
+                    VBox details=new VBox(name,meta,ref); HBox.setHgrow(details,Priority.ALWAYS); details.setMinWidth(0);
+                    double d=q.difference(); Label price=welcomeLabel(money(q.price()),"activity-amount");
+                    Label change=welcomeLabel((d>0?"+":d<0?"-":"")+money(Math.abs(d))+(d>0?" ▴":d<0?" ▾":""),"price-change"); change.getStyleClass().add(d>0?"market-above":d<0?"market-below":"unchanged");
+                    VBox amounts=new VBox(price,change); amounts.setAlignment(Pos.CENTER_RIGHT); HBox row=new HBox(8,icon,details,amounts); row.setAlignment(Pos.CENTER_LEFT); rows.getChildren().add(row);
+                }
+                if(rows.getChildren().isEmpty()) rows.getChildren().add(welcomeLabel("No matching market prices","subtext"));
+            };
+            search.textProperty().addListener((o,a,b)->render.run()); market.valueProperty().addListener((o,a,b)->render.run()); filter.valueProperty().addListener((o,a,b)->render.run()); render.run();
+        } catch(Exception ex) { Label error=welcomeLabel("Unable to load market prices: "+ex.getMessage(),"subtext"); error.setWrapText(true); rows.getChildren().add(error); }
+        ScrollPane scroll=new ScrollPane(content); scroll.setFitToWidth(true); scroll.setFitToHeight(true); scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER); scroll.getStyleClass().add("transparent-scroll");
+        VBox wrapper=new VBox(scroll); VBox.setVgrow(scroll,Priority.ALWAYS); return wrapper;
+    }
+    private VBox buildPersonalPrices() {
         VBox content = new VBox(6); content.setPadding(new Insets(42,0,0,0));
         VBox summary = new VBox(5); summary.getStyleClass().add("tracker-summary");
         Label title = new Label("COMMODITY TRACKER"); title.getStyleClass().add("eyebrow");

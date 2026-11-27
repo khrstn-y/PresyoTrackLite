@@ -5,6 +5,7 @@ import java.time.YearMonth;
 
 public class Budget {
 
+    //encapsulations
     private double amount;
     private YearMonth month;
 

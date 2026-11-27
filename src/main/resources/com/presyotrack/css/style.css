@@ -133,3 +133,9 @@
 .settings-logout { -fx-background-color: rgba(150,45,45,.30); -fx-text-fill: #ffd0d0; -fx-font-weight: bold; -fx-border-color: rgba(255,190,190,.55); -fx-border-radius: 13; }
 .settings-progress > .bar { -fx-background-color: #b9dbab; -fx-background-radius: 8; -fx-padding: 3; }
 .settings-progress > .track { -fx-background-color: rgba(255,255,255,.20); -fx-background-radius: 8; }
+
+.deck-tab { -fx-background-radius: 18; -fx-text-fill: white; -fx-padding: 7 10; -fx-font-size: 12px; }
+.deck-active { -fx-background-color: #315c39; }
+.deck-inactive { -fx-background-color: rgba(255,255,255,.18); }
+.market-above { -fx-text-fill: #ffad96; -fx-background-color: rgba(180,60,30,.22); }
+.market-below { -fx-text-fill: #8df49b; -fx-background-color: rgba(40,150,60,.22); }
