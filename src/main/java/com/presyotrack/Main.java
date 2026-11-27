@@ -34,7 +34,6 @@ public class Main extends Application {
     private final VBox activityList = new VBox(10);
     private Label balanceValue;
     private Label spentValue;
-    private int transactionCount = 0;
     private double spent = 0.0;
     private double budget = 0.0;
     private java.time.YearMonth budgetMonth = java.time.YearMonth.now();
@@ -101,7 +100,12 @@ public class Main extends Application {
         backdrop.getChildren().add(buildWelcome(backdrop));
 
         Scene scene = new Scene(backdrop, 390, 844);
-        scene.getStylesheets().add(getClass().getResource("/com/presyotrack/css/style.css").toExternalForm());
+        java.net.URL stylesheet = getClass().getResource("/com/presyotrack/css/style.css");
+        if (stylesheet != null) {
+            scene.getStylesheets().add(stylesheet.toExternalForm());
+        } else {
+            System.err.println("Stylesheet not found.");
+        }
         stage.setTitle("PresyoTrack Lite");
         stage.setMinWidth(390);
         stage.setMinHeight(700);
@@ -156,7 +160,7 @@ public class Main extends Application {
         HBox presets = new HBox(5); for(int n : new int[]{3000,5000,8000,10000}) { Button b = new Button(String.format(Locale.US,"PHP %,d",n)); b.getStyleClass().add("setup-preset"); b.setMaxWidth(Double.MAX_VALUE); HBox.setHgrow(b,Priority.ALWAYS); b.setOnAction(e -> amount.setText(String.format(Locale.US,"%,.2f",(double)n))); presets.getChildren().add(b); }
         ComboBox<java.time.YearMonth> month = new ComboBox<>(); month.getStyleClass().add("setup-month"); month.setMaxWidth(Double.MAX_VALUE);
         for(int i=-24;i<=24;i++) month.getItems().add(budgetMonth.plusMonths(i));
-        month.setConverter(new javafx.util.StringConverter<java.time.YearMonth>() { public String toString(java.time.YearMonth m){return m==null?"":m.format(DateTimeFormatter.ofPattern("MMMM yyyy",Locale.ENGLISH));} public java.time.YearMonth fromString(String v){return java.time.YearMonth.parse(v,DateTimeFormatter.ofPattern("MMMM yyyy",Locale.ENGLISH));} }); month.setValue(budgetMonth);
+        month.setConverter(new javafx.util.StringConverter<>() { public String toString(java.time.YearMonth m){return m==null?"":m.format(DateTimeFormatter.ofPattern("MMMM yyyy",Locale.ENGLISH));} public java.time.YearMonth fromString(String v){return java.time.YearMonth.parse(v,DateTimeFormatter.ofPattern("MMMM yyyy",Locale.ENGLISH));} }); month.setValue(budgetMonth);
         Label note=welcomeLabel("ⓘ You can update this budget anytime in Settings.","setup-note"); note.setWrapText(true);
         card.getChildren().addAll(welcomeLabel("Monthly Grocery Budget","setup-label"),amountBox,presets,welcomeLabel("Select Budget Month","setup-label"),month,note);
         Region middle = new Region(); VBox.setVgrow(middle,Priority.ALWAYS); Region bottom = new Region(); VBox.setVgrow(bottom,Priority.ALWAYS);
@@ -446,7 +450,7 @@ public class Main extends Application {
 
         Button add = new Button("+");
         add.getStyleClass().add("add-button");
-        add.setOnAction(e -> { showAddTransaction(); });
+        add.setOnAction(e -> showAddTransaction());
 
         HBox bottom = new HBox(18, nav, add);
         bottom.setAlignment(Pos.CENTER);
@@ -529,7 +533,7 @@ public class Main extends Application {
         HBox amount = new HBox(8,welcomeLabel(money(budget),"settings-money"),editBudget); amount.setAlignment(Pos.CENTER_LEFT);
         Button month = settingsButton("Budget Month   ›"); month.setOnAction(e -> editSettingsBudget());
         double left = budgetReport.getRemainingBudget();
-        ProgressBar progress = new ProgressBar(Math.max(0,Math.min(1,budget > 0 ? spent / budget : 0))); progress.setMaxWidth(Double.MAX_VALUE); progress.getStyleClass().add("settings-progress");
+        ProgressBar progress = new ProgressBar(Math.clamp(budget > 0 ? spent / budget : 0.0, 0.0, 1.0)); progress.setMaxWidth(Double.MAX_VALUE); progress.getStyleClass().add("settings-progress");
         budgetCard.getChildren().addAll(welcomeLabel("Monthly Grocery Budget","subtext"),amount,settingsLine(),month,welcomeLabel(budgetMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy",Locale.ENGLISH)),"settings-name"),settingsLine(),welcomeLabel("Remaining Balance","subtext"),welcomeLabel(money(left),"settings-money"),welcomeLabel(Math.round(budget > 0 ? left / budget * 100 : 0)+"% left","subtext"),progress);
         VBox about = settingsCard(); Button aboutButton = settingsButton("ⓘ  About PresyoTrack Lite   ›"); aboutButton.setOnAction(e -> alert("About PresyoTrack Lite","Version 1.0.0\nYour Money. Better Days.\nMonitor commodity prices, record grocery expenses and manage your monthly budget.")); about.getChildren().addAll(aboutButton,welcomeLabel("Version 1.0.0","subtext"));
         Button logout = settingsButton("Log Out"); logout.getStyleClass().add("settings-logout"); logout.setOnAction(e -> { Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,"Return to the welcome screen? Your current data stays in memory.",ButtonType.CANCEL,ButtonType.OK); confirm.setHeaderText("Log Out"); if(confirm.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK){closeExpense(); settingsOpen=false; pricesOpen=false; expensesOpen=false; refreshScreen(); appBackdrop.getChildren().setAll(buildWelcome(appBackdrop));} });
@@ -564,13 +568,62 @@ public class Main extends Application {
         Region line2 = new Region(); line2.getStyleClass().add("separator");
         HBox filters = new HBox(4); filters.getStyleClass().add("expense-filters");
         for(String name : new String[]{"Today","Week","Month"}) {Button b=new Button(name); b.getStyleClass().addAll("expense-filter",name.equals(period)?"selected-filter":"unselected-filter"); b.setMaxWidth(Double.MAX_VALUE); HBox.setHgrow(b,Priority.ALWAYS); b.setOnAction(e->{period=name;refreshScreen();}); filters.getChildren().add(b);}
-        String[] categories={"Pantry","Dairy & Eggs","Beans","Others / Uncategorized"};
-        String[] colors={"#c5d9c5","#d4d13e","#456482","#d6a12d"};
-        double[] totals=new double[4]; LocalDate now=LocalDate.now();
-        for(Expense x:expenses) { if(!java.time.YearMonth.from(x.date()).equals(budgetMonth)) continue; if(period.equals("Today")&&!x.date().equals(now))continue; if(period.equals("Week")&&(x.date().isBefore(now.with(java.time.DayOfWeek.MONDAY))||x.date().isAfter(now.with(java.time.DayOfWeek.SUNDAY))))continue; int i=java.util.Arrays.asList(categories).indexOf(x.category()); totals[i<0?3:i]+=x.amount(); }
-        double total=java.util.Arrays.stream(totals).sum();
+        String[] categories = {"Pantry", "Dairy & Eggs", "Beans", "Others / Uncategorized"};
+        String[] colors = new String[4];
+        colors[0] = "#c5d9c5";
+        colors[1] = "#d4d13e";
+        colors[2] = "#456482";
+        colors[3] = "#d6a12d";
+        double[] totals = new double[categories.length];
+        LocalDate now = LocalDate.now();
+        for (Expense x : expenses) {
+            if (!java.time.YearMonth.from(x.date()).equals(budgetMonth)) continue;
+            if (period.equals("Today") && !x.date().equals(now)) continue;
+            if (period.equals("Week") &&
+                    (x.date().isBefore(now.with(java.time.DayOfWeek.MONDAY)) ||
+                     x.date().isAfter(now.with(java.time.DayOfWeek.SUNDAY)))) continue;
+            int i = java.util.Arrays.asList(categories).indexOf(x.category());
+            if (i < 0) i = categories.length - 1;
+            totals[i] += x.amount();
+        }
+        double total = java.util.Arrays.stream(totals).sum();
         javafx.scene.canvas.Canvas chart=new javafx.scene.canvas.Canvas(344,180); chart.widthProperty().bind(content.widthProperty().subtract(46));
-        Runnable draw=()->{var g=chart.getGraphicsContext2D(); double w=chart.getWidth(); g.clearRect(0,0,w,180); if(total==0){g.setFill(Color.WHITE);g.fillText("No expenses in this period",20,90);return;} double x=0; double end=36; for(int i=0;i<4;i++){if(totals[i]==0)continue; double len=(w-end)*totals[i]/total; Color c=Color.web(colors[i]); g.setFill(c.deriveColor(0,1,1,.66)); g.fillRoundRect(x,16,len+end,148,end,148); g.setStroke(c.deriveColor(0,1,1,.85));g.setLineWidth(1.5);g.strokeOval(x,16,end,148); x+=len;}}; chart.widthProperty().addListener((o,a,b)->draw.run()); draw.run();
+        Runnable draw = () -> {
+            var g = chart.getGraphicsContext2D();
+            double w = chart.getWidth();
+
+            g.clearRect(0, 0, w, 180);
+
+            if (total == 0) {
+                g.setFill(Color.WHITE);
+                g.fillText("No expenses in this period", 20, 90);
+                return;
+            }
+
+            double x = 0;
+            double end = 36;
+
+            for (int i = 0; i < 4; i++) {
+                if (totals[i] == 0) {
+                    continue;
+                }
+
+                double len = (w - end) * totals[i] / total;
+                Color c = Color.web(colors[i]);
+
+                g.setFill(c.deriveColor(0, 1, 1, 0.66));
+                g.fillRoundRect(x, 16, len + end, 148, end, 148);
+
+                g.setStroke(c.deriveColor(0, 1, 1, 0.85));
+                g.setLineWidth(1.5);
+                g.strokeOval(x, 16, end, 148);
+
+                x += len;
+            }
+        };
+
+        chart.widthProperty().addListener((o, a, b) -> draw.run());
+        draw.run();
         VBox legend=new VBox(13); legend.getStyleClass().add("expense-glass");
         for(int i=0;i<4;i++){Label swatch=new Label(" "); swatch.setStyle("-fx-background-color: "+colors[i]+"; -fx-background-radius: 7; -fx-min-width: 16; -fx-min-height: 22;"); Label name=welcomeLabel(categories[i],"subtext"); Label value=welcomeLabel(money(totals[i])+" • "+String.format(Locale.US,"%.1f%%",total==0?0:totals[i]/total*100),"expense-legend-value"); HBox row=new HBox(7,swatch,new VBox(name,value));row.setAlignment(Pos.CENTER_LEFT);legend.getChildren().add(row);}
         Region gap=new Region(); VBox.setVgrow(gap,Priority.ALWAYS);
@@ -623,7 +676,13 @@ public class Main extends Application {
                 rows.getChildren().clear(); String query=search.getText().toLowerCase(Locale.ROOT);
                 for(var q:selected) {
                     if(!(q.name()+" "+q.category()).toLowerCase(Locale.ROOT).contains(query)) continue;
-                    if(!switch(filter.getValue()){case "Above benchmark"->q.difference()>0;case "Below benchmark"->q.difference()<0;case "At benchmark"->q.difference()==0;default->true;}) continue;
+                    boolean matchesFilter = switch (filter.getValue()) {
+                        case "Above benchmark" -> q.difference() > 0;
+                        case "Below benchmark" -> q.difference() < 0;
+                        case "At benchmark" -> q.difference() == 0;
+                        default -> true;
+                    };
+                    if (!matchesFilter) continue;
                     Label icon=welcomeLabel("◇","product-icon"); Label name=welcomeLabel(q.name(),"activity-name"); name.setWrapText(true);
                     Label meta=welcomeLabel(q.market().split(" Public")[0]+" • "+q.unit(),"activity-date");
                     Label ref=welcomeLabel("Ref: "+money(q.benchmark()),"activity-date");
