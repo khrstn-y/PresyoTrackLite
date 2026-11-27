@@ -17,9 +17,16 @@ public final class CommodityDAO {
                 Files.copy(in, db, StandardCopyOption.REPLACE_EXISTING);
             }
             List<Quote> result = new ArrayList<>();
+
+        // language=none
+        String sql = "SELECT name, category, unit, market, "
+                + "observed_on, price, benchmark_price "
+                + "FROM regional_comparison "
+                + "WHERE benchmark_price IS NOT NULL "
+                + "ORDER BY name, market, observed_on DESC";
             try (Connection c = DriverManager.getConnection("jdbc:sqlite:" + db.toAbsolutePath());
                  Statement s = c.createStatement();
-                 ResultSet r = s.executeQuery("SELECT name,category,unit,market,observed_on,price,benchmark_price FROM regional_comparison WHERE benchmark_price IS NOT NULL ORDER BY name,market,observed_on DESC")) {
+                 ResultSet r = s.executeQuery(sql)) {
                 while (r.next()) result.add(new Quote(r.getString(1),r.getString(2),r.getString(3),r.getString(4),r.getString(5),r.getDouble(6),r.getDouble(7)));
             }
             return result;

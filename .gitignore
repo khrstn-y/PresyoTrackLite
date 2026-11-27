@@ -37,3 +37,8 @@ build/
 
 ### Mac OS ###
 .DS_Store
+# Temporary backup files
+*.bak
+project-errors.txt
+/budget.txt
+/expenses.txt
